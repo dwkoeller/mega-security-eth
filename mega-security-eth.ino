@@ -1008,7 +1008,7 @@ void updateHomeAssistant() {
   for( unsigned int a=0; a<N_ZONES; a++ ) {
     if(zones[a].zoneEnable) {
       String topic = String(MQTT_DISCOVERY_TOPIC_PREFIX) + "zone_" + String(a) + "/config";
-      String message = String(String("{\"name\": \"") + zones[a].zoneName + String("\", \"state_topic\": \"") + String(MQTT_DISCOVERY_TOPIC_PREFIX) + String("/state\", \"device_class\": \"") + zones[a].zoneSensorType + String("\"}"));
+      String message = String(String("{\"name\": \"") + zones[a].zoneName + String("\", \"state_topic\": \"") + String(MQTT_DISCOVERY_TOPIC_PREFIX) + String("state\", \"device_class\": \"") + zones[a].zoneSensorType + String("\"}"));
       Serial.print(F("MQTT - "));
       Serial.print(topic);
       Serial.print(F(" : "));
