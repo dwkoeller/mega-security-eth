@@ -24,7 +24,7 @@ const char compile_date[] = __DATE__ " " __TIME__;
 #define MQTT_DEVICE                  "mega-security" // Enter your MQTT device
 #define MQTT_PORT                    1883 // Enter your MQTT server port.
 #define MQTT_SOCKET_TIMEOUT          120
-#define FIRMWARE_VERSION             "-1.05"
+#define FIRMWARE_VERSION             "-1.07"
 #define EEPROM_DATA_VERSION          2
 #define NTP_SERVER                   "pool.ntp.org"
 #define MQTT_VERSION_PUB             "mega-security/version"
@@ -432,12 +432,6 @@ void sensorTickerFunc() {
 }
 
 P(Http400) = "HTTP 400 - BAD REQUEST";
-//P(Main_menu) = "<h1>Mega Security - Admin Panel</h1>"
-//               "<table><tr><td>"
-//               "<a href=\"system.html\">  System Setup  </a></td><td>"
-//               "<a href=\"zones.html\">  Zone Setup  </a></td><td>"
-//               "<a href=\"password.html\">  Admin Setup  </a></td><td>"
-//               "<a href=\"reboot.html\">  Reboot System  </a></td></tr></table>";
 
 P(Page_start) = "<html><head><title>Mega Security Setup</title></head>"
 
@@ -1014,7 +1008,7 @@ void updateHomeAssistant() {
   for( unsigned int a=0; a<N_ZONES; a++ ) {
     if(zones[a].zoneEnable) {
       String topic = String(MQTT_DISCOVERY_TOPIC_PREFIX) + "zone_" + String(a) + "/config";
-      String message = String(String("{\"name\": \"") + zones[a].zoneName + String("\", \"device_class\": \"") + zones[a].zoneSensorType + String("\"}"));
+      String message = String(String("{\"name\": \"") + zones[a].zoneName + String("\", \"state_topic\": \"") + String(MQTT_DISCOVERY_TOPIC_PREFIX) + String("/state\", \"device_class\": \"") + zones[a].zoneSensorType + String("\"}"));
       Serial.print(F("MQTT - "));
       Serial.print(topic);
       Serial.print(F(" : "));
