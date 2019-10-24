@@ -1007,13 +1007,36 @@ void checkZoneStatus() {
 void updateHomeAssistant() {
   for( unsigned int a=0; a<N_ZONES; a++ ) {
     if(zones[a].zoneEnable) {
+
+      String zoneBypass = "OFF";
+      String zoneDelay = "OFF";
+      
       String topic = String(MQTT_DISCOVERY_TOPIC_PREFIX) + "zone_" + String(a) + "/config";
-      String message = String(String("{\"name\": \"") + zones[a].zoneName + String("\", \"state_topic\": \"") + String(MQTT_DISCOVERY_TOPIC_PREFIX) + String("state\", \"device_class\": \"") + zones[a].zoneSensorType + String("\"}"));
+      String message = String("{\"name\": \"") + zones[a].zoneName +
+                       String("\", \"json_attributes_topic\": \"") + String(MQTT_DISCOVERY_TOPIC_PREFIX) + "zone_" + String(a) + 
+                       String("/attributes\", \"state_topic\": \"") + String(MQTT_DISCOVERY_TOPIC_PREFIX) + "zone_" + String(a) +
+                       String("/state\", \"device_class\": \"") + zones[a].zoneSensorType + String("\"}");
+      Serial.print(F("MQTT - "));
+      Serial.print(topic);
+      Serial.print(F(" : "));
+      Serial.println(message.c_str());
+      client.publish(topic.c_str(), message.c_str(), true);
+
+      if(zones[a].zoneBypass == true) {
+        zoneBypass = "ON";
+      }
+      if(zones[a].zoneDelay == true) {
+        zoneDelay = "ON";
+      }
+      topic = String(MQTT_DISCOVERY_TOPIC_PREFIX) + "zone_" + String(a) + "/attributes";
+      message = String("{\"delay\": \"") + zoneDelay + String("\", \"bypass\": \"") + zoneBypass + String("\"}");
+
       Serial.print(F("MQTT - "));
       Serial.print(topic);
       Serial.print(F(" : "));
       Serial.println(message);
       client.publish(topic.c_str(), message.c_str(), true);
+      
     }
   } 
 }

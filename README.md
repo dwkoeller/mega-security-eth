@@ -10,3 +10,7 @@ TODO
 
 Add alarm capabilities and logic for disarm/arm, etc.
 Integrate with the remaining functions in Home Assistant MQTT Alarm Panel
+
+NOTE:
+
+Pubsubclient.h MQTT_MAX_PACKET_SIZE must be increased from 128 to 256
