@@ -15,26 +15,22 @@ byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 //This can be used to output the date the code was compiled
 const char compile_date[] = __DATE__ " " __TIME__;
 
-/************ WIFI, OTA and MQTT INFORMATION (CHANGE THESE FOR YOUR SETUP) ******************/
-//#define MQTT_SERVER "" // Enter your MQTT server address or IP.
-//#define MQTT_USER "" //enter your MQTT username
-//#define MQTT_PASSWORD "" //enter your password
-#define WEB_ADMIN_ID                 "admin"
-#define WEB_ADMIN_PASSWORD           "password"
-#define MQTT_DEVICE                  "mega-security" // Enter your MQTT device
-#define MQTT_PORT                    1883 // Enter your MQTT server port.
-#define MQTT_SOCKET_TIMEOUT          120
-#define FIRMWARE_VERSION             "-1.07"
-#define EEPROM_DATA_VERSION          2
-#define NTP_SERVER                   "pool.ntp.org"
-#define MQTT_VERSION_PUB             "mega-security/version"
-#define MQTT_COMPILE_PUB             "mega-security/compile"
-#define MQTT_HEARTBEAT_PUB           "mega-security/heartbeat"
-#define MQTT_HEARTBEAT_SUB           "heartbeat/#"
-#define MQTT_HEARTBEAT_TOPIC         "heartbeat"
-#define MQTT_DISCOVERY_TOPIC_PREFIX  "homeassistant/binary_sensor/"
-#define MQTT_ALARM_COMMAND_TOPIC     "home/alarm/set"
-#define MQTT_ALARM_STATE_TOPIC       "home/alarm"
+#define WEB_ADMIN_ID                         "admin"
+#define WEB_ADMIN_PASSWORD                   "password"
+#define MQTT_DEVICE                          "mega-security" // Enter your MQTT device
+#define MQTT_PORT                            1883 // Enter your MQTT server port.
+#define MQTT_SOCKET_TIMEOUT                  120
+#define FIRMWARE_VERSION                     "-1.10"
+#define EEPROM_DATA_VERSION                  2
+#define NTP_SERVER                           "pool.ntp.org"
+#define MQTT_VERSION_PUB                     "mega-security/version"
+#define MQTT_COMPILE_PUB                     "mega-security/compile"
+#define MQTT_HEARTBEAT_PUB                   "mega-security/heartbeat"
+#define MQTT_HEARTBEAT_SUB                   "heartbeat/#"
+#define MQTT_HEARTBEAT_TOPIC                 "heartbeat"
+#define MQTT_DISCOVERY_BINARY_SENSOR_PREFIX  "homeassistant/binary_sensor/"
+#define MQTT_ALARM_COMMAND_TOPIC             "home/alarm/set"
+#define MQTT_ALARM_STATE_TOPIC               "home/alarm"
 
 #define SS     10    //W5500 CS
 #define RST    7    //W5500 RST For mega RST 11
@@ -169,6 +165,7 @@ SystemInfo sysInfo;
 Zone zones[N_ZONES];
 
 bool rebootFlag = false;
+bool updateZoneStates = false;
                  
 const int TZ_OFFSET = 5*3600;  //EST UTC-5
 
@@ -386,6 +383,11 @@ void loop() {
   else {
     // Client connected
     client.loop();
+    // Update zone states on next pass
+    if(updateZoneStates) {
+      updateZoneStates = false;
+      queryZoneStates();
+    }
   }
   
   sensorTicker.update();
@@ -813,6 +815,7 @@ void zonesCmd(WebServer &server, WebServer::ConnectionType type, char *, bool) {
       } while (repeat);
       writeToEeprom();
       updateHomeAssistant();
+      updateZoneStates = true;
     }  
 
     server.printP(Page_start);
@@ -984,10 +987,11 @@ void checkZoneStatus() {
   
   for( unsigned int a=0; a<N_ZONES; a++ ) {
     if(zones[a].zoneEnable) {
+      
       zoneState[a] = getCurrentState(zoneMap[a]);
       if (zoneState[a] != lastZoneState[a]) {
         lastZoneState[a] = zoneState[a];
-        String topic = String(MQTT_DISCOVERY_TOPIC_PREFIX) + "zone_" + String(a) + "/state";
+        String topic = String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) + "/state";
         Serial.print(F("MQTT - "));
         Serial.print(topic);
         Serial.print(" : ");
@@ -1004,17 +1008,52 @@ void checkZoneStatus() {
   }  
 }
 
-void updateHomeAssistant() {
+void queryZoneStates() {
   for( unsigned int a=0; a<N_ZONES; a++ ) {
     if(zones[a].zoneEnable) {
 
       String zoneBypass = "OFF";
       String zoneDelay = "OFF";
+
+      if(zones[a].zoneBypass == true) {
+        zoneBypass = "ON";
+      }
+      if(zones[a].zoneDelay == true) {
+        zoneDelay = "ON";
+      }
+
+      String topic = String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) + "_delay/state";
+      String message = zoneDelay;
       
-      String topic = String(MQTT_DISCOVERY_TOPIC_PREFIX) + "zone_" + String(a) + "/config";
+      Serial.print(F("MQTT - "));
+      Serial.print(topic);
+      Serial.print(F(" : "));
+      Serial.println(message.c_str());
+      client.publish(topic.c_str(), message.c_str(), true);
+
+      topic = String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) + "_bypass/state";
+      message = zoneBypass;
+      Serial.print(F("MQTT - "));
+      Serial.print(topic);
+      Serial.print(F(" : "));
+      Serial.println(message.c_str());
+      client.publish(topic.c_str(), message.c_str(), true);
+
+    }
+  }
+}
+
+void updateHomeAssistant() {
+  for( unsigned int a=0; a<N_ZONES; a++ ) {
+    if(zones[a].zoneEnable) {
+
+      String zoneBypass = "off";
+      String zoneDelay = "off";
+      
+      String topic = String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) + "/config";
       String message = String("{\"name\": \"") + zones[a].zoneName +
-                       String("\", \"json_attributes_topic\": \"") + String(MQTT_DISCOVERY_TOPIC_PREFIX) + "zone_" + String(a) + 
-                       String("/attributes\", \"state_topic\": \"") + String(MQTT_DISCOVERY_TOPIC_PREFIX) + "zone_" + String(a) +
+                       String("\", \"json_attributes_topic\": \"") + String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) + 
+                       String("/attributes\", \"state_topic\": \"") + String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) +
                        String("/state\", \"device_class\": \"") + zones[a].zoneSensorType + String("\"}");
       Serial.print(F("MQTT - "));
       Serial.print(topic);
@@ -1023,13 +1062,52 @@ void updateHomeAssistant() {
       client.publish(topic.c_str(), message.c_str(), true);
 
       if(zones[a].zoneBypass == true) {
-        zoneBypass = "ON";
+        zoneBypass = "on";
       }
       if(zones[a].zoneDelay == true) {
-        zoneDelay = "ON";
+        zoneDelay = "on";
       }
-      topic = String(MQTT_DISCOVERY_TOPIC_PREFIX) + "zone_" + String(a) + "/attributes";
-      message = String("{\"delay\": \"") + zoneDelay + String("\", \"bypass\": \"") + zoneBypass + String("\"}");
+
+      topic = String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) + "_delay/config";
+      message = String("{\"name\": \"") + zones[a].zoneName +
+                       String(" Delay\", \"json_attributes_topic\": \"") + String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) + 
+                       String("_delay/attributes\", \"state_topic\": \"") + String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) +
+                       String("_delay/state\"}");
+      Serial.print(F("MQTT - "));
+      Serial.print(topic);
+      Serial.print(F(" : "));
+      Serial.println(message.c_str());
+      client.publish(topic.c_str(), message.c_str(), true);
+
+      topic = String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) + "_bypass/config";
+      message = String("{\"name\": \"") + zones[a].zoneName +
+                       String(" Bypass\", \"json_attributes_topic\": \"") + String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) + 
+                       String("_bypass/attributes\", \"state_topic\": \"") + String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) +
+                       String("_bypass/state\"}");
+      Serial.print(F("MQTT - "));
+      Serial.print(topic);
+      Serial.print(F(" : "));
+      Serial.println(message.c_str());
+      client.publish(topic.c_str(), message.c_str(), true);
+      
+      topic = String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) + "/attributes";
+      message = String("{\"delay\": \"") + zoneDelay + String("\", \"bypass\": \"") + zoneBypass + String("\", \"zone_id\": \"") + String(a) + String("\"}");
+
+      Serial.print(F("MQTT - "));
+      Serial.print(topic);
+      Serial.print(F(" : "));
+      Serial.println(message);
+      client.publish(topic.c_str(), message.c_str(), true);
+
+      topic = String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) + "_bypass/attributes";
+
+      Serial.print(F("MQTT - "));
+      Serial.print(topic);
+      Serial.print(F(" : "));
+      Serial.println(message);
+      client.publish(topic.c_str(), message.c_str(), true);
+
+      topic = String(MQTT_DISCOVERY_BINARY_SENSOR_PREFIX) + "zone_" + String(a) + "_delay/attributes";
 
       Serial.print(F("MQTT - "));
       Serial.print(topic);
@@ -1066,6 +1144,7 @@ boolean reconnect() {
     client.publish(MQTT_VERSION_PUB, firmwareVer.c_str(), true);
     client.publish(MQTT_COMPILE_PUB, compileDate.c_str(), true);
     updateHomeAssistant();
+    updateZoneStates = true;
   }
   return client.connected();
 }
