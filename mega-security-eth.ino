@@ -23,9 +23,6 @@ const char compile_date[] = __DATE__ " " __TIME__;
 #define FIRMWARE_VERSION                     "-1.20"
 #define EEPROM_DATA_VERSION                  2
 #define NTP_SERVER                           "pool.ntp.org"
-#define MQTT_VERSION_PUB                     "mega-security/version"
-#define MQTT_COMPILE_PUB                     "mega-security/compile"
-#define MQTT_HEARTBEAT_PUB                   "mega-security/heartbeat"
 #define MQTT_HEARTBEAT_SUB                   "heartbeat/#"
 #define MQTT_HEARTBEAT_TOPIC                 "heartbeat"
 #define MQTT_DISCOVERY_BINARY_SENSOR_PREFIX  "homeassistant/binary_sensor/"
@@ -1232,8 +1229,6 @@ boolean reconnect() {
     client.subscribe(MQTT_ALARM_STATE_TOPIC);    
     String firmwareVer = String(F("Firmware Version: ")) + String(FIRMWARE_VERSION);
     String compileDate = String(F("Build Date: ")) + String(compile_date);
-    client.publish(MQTT_VERSION_PUB, firmwareVer.c_str(), true);
-    client.publish(MQTT_COMPILE_PUB, compileDate.c_str(), true);
     updateHomeAssistant();
     updateZoneStates = true;
     registerTelemetry();
