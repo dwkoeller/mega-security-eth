@@ -212,7 +212,7 @@ void callback(char* p_topic, byte* p_payload, unsigned int p_length) {
   Serial.println(strTopic);   
   if (strTopic == MQTT_HEARTBEAT_TOPIC) {
     resetWatchdog();
-    client.publish(MQTT_HEARTBEAT_PUB, "Heartbeat Received");
+    updateTelemetry(payload);
     return;
   }
   if(strTopic == MQTT_ALARM_STATE_TOPIC) {
@@ -1076,7 +1076,7 @@ void queryZoneStates() {
   }
 }
 
-void updateTelemetry() {
+void registerTelemetry() {
   String topic = String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) + "/config";
   String message = String("{\"name\": \"") + HA_TELEMETRY + "-" + MQTT_DEVICE +
                    String("\", \"json_attributes_topic\": \"") + String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) + 
@@ -1088,6 +1088,10 @@ void updateTelemetry() {
   Serial.println(message.c_str());
 
   client.publish(topic.c_str(), message.c_str(), true);  
+  
+}
+
+void updateTelemetry(String heartbeat) {
 
   byte macBuffer[6];  // create a buffer to hold the MAC address
   Ethernet.macAddress(macBuffer); // fill the buffer 
@@ -1099,11 +1103,10 @@ void updateTelemetry() {
     }
   }
   
-  topic = String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) + "/attributes";
-  message = String("{\"firmware\": \"") + FIRMWARE_VERSION  +
+  String topic = String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) + "/attributes";
+  String message = String("{\"firmware\": \"") + FIRMWARE_VERSION  +
             String("\", \"mac_address\": \"") + mac_address +
-            String("\", \"compile_date\": \"") + compile_date +
-            String("\", \"friendly_name\": \"") + MQTT_DEVICE +
+            String("\", \"heartbeat\": \"") + heartbeat +
             String("\", \"ip_address\": \"") + ip2Str(Ethernet.localIP()) + String("\"}");
   Serial.println(Ethernet.localIP());
   Serial.print(F("MQTT - "));
@@ -1113,7 +1116,7 @@ void updateTelemetry() {
   client.publish(topic.c_str(), message.c_str(), true);
 
   topic = String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) + "/state";
-  message = String(MQTT_DEVICE) + FIRMWARE_VERSION + "  " + String(compile_date) + "  " + ip2Str(Ethernet.localIP());
+  message = String(MQTT_DEVICE) + FIRMWARE_VERSION + "  " + ip2Str(Ethernet.localIP()) + "  " + String(heartbeat);
   Serial.print(F("MQTT - "));
   Serial.print(topic);
   Serial.print(F(" : "));
@@ -1233,7 +1236,8 @@ boolean reconnect() {
     client.publish(MQTT_COMPILE_PUB, compileDate.c_str(), true);
     updateHomeAssistant();
     updateZoneStates = true;
-    updateTelemetry();
+    registerTelemetry();
+    updateTelemetry("Unknown");
   }
   return client.connected();
 }
