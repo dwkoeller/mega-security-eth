@@ -20,7 +20,7 @@ const char compile_date[] = __DATE__ " " __TIME__;
 #define MQTT_DEVICE                          "mega-security" // Enter your MQTT device
 #define MQTT_PORT                            1883 // Enter your MQTT server port.
 #define MQTT_SOCKET_TIMEOUT                  120
-#define FIRMWARE_VERSION                     "-1.20"
+#define FIRMWARE_VERSION                     "-1.21"
 #define EEPROM_DATA_VERSION                  2
 #define NTP_SERVER                           "pool.ntp.org"
 #define MQTT_HEARTBEAT_SUB                   "heartbeat/#"
@@ -331,8 +331,8 @@ void setup() {
   client.setCallback(callback); //callback is the function that gets called for a topic sub
 
   Ethernet.setHostname(MQTT_DEVICE);
-  Ethernet.begin(mac); 
-
+  Ethernet.begin(mac);
+ 
   Serial.println(Ethernet.localIP());
 
   lastReconnectAttempt = 0;
@@ -1105,7 +1105,6 @@ void updateTelemetry(String heartbeat) {
             String("\", \"mac_address\": \"") + mac_address +
             String("\", \"heartbeat\": \"") + heartbeat +
             String("\", \"ip_address\": \"") + ip2Str(Ethernet.localIP()) + String("\"}");
-  Serial.println(Ethernet.localIP());
   Serial.print(F("MQTT - "));
   Serial.print(topic);
   Serial.print(F(" : "));
@@ -1113,7 +1112,7 @@ void updateTelemetry(String heartbeat) {
   client.publish(topic.c_str(), message.c_str(), true);
 
   topic = String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) + "/state";
-  message = String(MQTT_DEVICE) + FIRMWARE_VERSION + "  " + ip2Str(Ethernet.localIP()) + "  " + String(heartbeat);
+  message = String(MQTT_DEVICE) + FIRMWARE_VERSION + "  |  " + ip2Str(Ethernet.localIP()) + "  |  " + String(heartbeat);
   Serial.print(F("MQTT - "));
   Serial.print(topic);
   Serial.print(F(" : "));
