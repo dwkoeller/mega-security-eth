@@ -20,7 +20,7 @@ const char compile_date[] = __DATE__ " " __TIME__;
 #define MQTT_DEVICE                          "mega-security" // Enter your MQTT device
 #define MQTT_PORT                            1883 // Enter your MQTT server port.
 #define MQTT_SOCKET_TIMEOUT                  120
-#define FIRMWARE_VERSION                     "-1.10"
+#define FIRMWARE_VERSION                     "-1.20"
 #define EEPROM_DATA_VERSION                  2
 #define NTP_SERVER                           "pool.ntp.org"
 #define MQTT_VERSION_PUB                     "mega-security/version"
@@ -29,15 +29,17 @@ const char compile_date[] = __DATE__ " " __TIME__;
 #define MQTT_HEARTBEAT_SUB                   "heartbeat/#"
 #define MQTT_HEARTBEAT_TOPIC                 "heartbeat"
 #define MQTT_DISCOVERY_BINARY_SENSOR_PREFIX  "homeassistant/binary_sensor/"
+#define MQTT_DISCOVERY_SENSOR_PREFIX         "homeassistant/sensor/"
 #define MQTT_ALARM_COMMAND_TOPIC             "home/alarm/set"
 #define MQTT_ALARM_STATE_TOPIC               "home/alarm"
+#define HA_TELEMETRY                         "ha"
 
 #define SS     10    //W5500 CS
 #define RST    7    //W5500 RST For mega RST 11
 #define CS  4     //SD CS pin
 
 #define WATCHDOG   2
-#define PIN_ALARM  1
+#define PIN_ALARM  5
 
 #define PIN_ZONE1  22
 #define PIN_ZONE2  23
@@ -68,25 +70,29 @@ const char compile_date[] = __DATE__ " " __TIME__;
 #define PIN_ZONE27 48
 #define PIN_ZONE28 49
 
-#define ALARM_STATE_DISARMED    1
-#define ALARM_STATE_ARMED_HOME  2
-#define ALARM_STATE_ARMED_AWAY  3
-#define ALARM_STATE_ARMED_NIGHT 4
-#define ALARM_STATE_PENDING     5
-#define ALARM_STATE_TRIGGERED   6
+#define ALARM_STATE_DISARMED    0
+#define ALARM_STATE_ARMED_HOME  1
+#define ALARM_STATE_ARMED_AWAY  2
+#define ALARM_STATE_ARMED_NIGHT 3
+#define ALARM_STATE_PENDING     4
+#define ALARM_STATE_TRIGGERED   5
 
 const char* const alarmStates[] = {
   "Disarmed",
   "Armed Home",
   "Armed Away",
-  "Pending"
+  "Armed Night",
+  "Pending",
+  "Triggered"
 };
 
 const char* const alarmStateCommands[] = {
   "disarmed",
   "armed_home",
   "armed_away",
-  "pending"
+  "armed_night",
+  "pending",
+  "triggered"
 };
 
 const char* const alarmCommands[] = {
@@ -94,6 +100,7 @@ const char* const alarmCommands[] = {
   "ARM_HOME",
   "ARM_AWAY",
   "ARM_NIGHT",
+  "PENDING",
   "TRIGGERED",
 };
 
@@ -166,6 +173,8 @@ Zone zones[N_ZONES];
 
 bool rebootFlag = false;
 bool updateZoneStates = false;
+bool triggeredWithDelay = false;
+bool triggered = false;
                  
 const int TZ_OFFSET = 5*3600;  //EST UTC-5
 
@@ -208,19 +217,28 @@ void callback(char* p_topic, byte* p_payload, unsigned int p_length) {
   }
   if(strTopic == MQTT_ALARM_STATE_TOPIC) {
     if(payload == alarmStateCommands[ALARM_STATE_DISARMED]) {
+      Serial.println("Disarmed");
       sysInfo.alarmState = ALARM_STATE_DISARMED;
-
+      resetAlarm();
     }
     if(payload == alarmStateCommands[ALARM_STATE_ARMED_HOME]) {
+      Serial.println("Armed Home");
       sysInfo.alarmState = ALARM_STATE_ARMED_HOME;
-
     }
     if(payload == alarmStateCommands[ALARM_STATE_ARMED_AWAY]) {
+      Serial.println("Armed Away");
       sysInfo.alarmState = ALARM_STATE_ARMED_AWAY;
-
     }
+
     if(payload == alarmStateCommands[ALARM_STATE_PENDING]) {
+      Serial.println("Armed State Pending");
       sysInfo.alarmState = ALARM_STATE_PENDING;
+    }
+
+    if(payload == alarmStateCommands[ALARM_STATE_TRIGGERED]) {
+      Serial.println("Triggered");
+      sysInfo.alarmState = ALARM_STATE_TRIGGERED;
+      triggerAlarm();
     }
 
   }
@@ -301,7 +319,7 @@ void setup() {
   digitalWrite(SS, LOW);
   digitalWrite(CS, HIGH);  
   digitalWrite(RST,HIGH);
-  digitalWrite(PIN_ALARM, LOW);  
+  digitalWrite(PIN_ALARM, HIGH);  
  
   Serial.begin(115200);
   while (!Serial) {
@@ -364,6 +382,7 @@ void setup() {
   
   resetWatchdog();
   sensorTicker.start();
+  
 }
 
 void loop() {
@@ -413,21 +432,35 @@ void resetWatchdog() {
 }
 
 void triggerAlarm() {
-  Serial.println(F("Alarm triggered"));
-  digitalWrite(PIN_ALARM, HIGH);
+  Serial.println(F("Alarm triggered"));  
+  digitalWrite(PIN_ALARM, LOW);
+  triggered = true;
 }
 
 void resetAlarm() {
   Serial.println(F("Alarm reset"));
-  digitalWrite(PIN_ALARM, LOW);
+  digitalWrite(PIN_ALARM, HIGH);
+  triggered = false;
+  triggeredWithDelay = false;
 }
 
 void sensorTickerFunc() {   
   checkZoneStatus();
-  if((sysInfo.alarmState == ALARM_STATE_ARMED_HOME) || (sysInfo.alarmState == ALARM_STATE_ARMED_AWAY)) {
+  if((sysInfo.alarmState == ALARM_STATE_ARMED_HOME) || (sysInfo.alarmState == ALARM_STATE_ARMED_AWAY) || (sysInfo.alarmState == ALARM_STATE_ARMED_NIGHT)) {
     for( unsigned int a=0; a<N_ZONES; a++ ) {
       if(zones[a].zoneEnable) {
-              
+        if(! zones[a].zoneBypass) {
+          if(zoneState[a] == "Open") {
+            if(zones[a].zoneDelay && (sysInfo.alarmState == ALARM_STATE_ARMED_HOME)) {
+              if (! triggeredWithDelay) {
+                triggerAlarmWithDelay();         
+              }
+            }
+            else {
+              triggerAlarm();
+            }
+          }
+        }
       }
     }
   }
@@ -1043,6 +1076,60 @@ void queryZoneStates() {
   }
 }
 
+void updateTelemetry() {
+  String topic = String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) + "/config";
+  String message = String("{\"name\": \"") + HA_TELEMETRY + "-" + MQTT_DEVICE +
+                   String("\", \"json_attributes_topic\": \"") + String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) + 
+                   String("/attributes\", \"state_topic\": \"") + String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) +
+                   String("/state\"}");
+  Serial.print(F("MQTT - "));
+  Serial.print(topic);
+  Serial.print(F(" : "));
+  Serial.println(message.c_str());
+
+  client.publish(topic.c_str(), message.c_str(), true);  
+
+  byte macBuffer[6];  // create a buffer to hold the MAC address
+  Ethernet.macAddress(macBuffer); // fill the buffer 
+  String mac_address;
+  for (byte octet = 0; octet < 6; octet++) {    
+    mac_address += String(macBuffer[octet], HEX);
+    if (octet < 5) {
+      mac_address += "-";
+    }
+  }
+  
+  topic = String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) + "/attributes";
+  message = String("{\"firmware\": \"") + FIRMWARE_VERSION  +
+            String("\", \"mac_address\": \"") + mac_address +
+            String("\", \"compile_date\": \"") + compile_date +
+            String("\", \"friendly_name\": \"") + MQTT_DEVICE +
+            String("\", \"ip_address\": \"") + ip2Str(Ethernet.localIP()) + String("\"}");
+  Serial.println(Ethernet.localIP());
+  Serial.print(F("MQTT - "));
+  Serial.print(topic);
+  Serial.print(F(" : "));
+  Serial.println(message);
+  client.publish(topic.c_str(), message.c_str(), true);
+
+  topic = String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) + "/state";
+  message = String(MQTT_DEVICE) + FIRMWARE_VERSION + "  " + String(compile_date) + "  " + ip2Str(Ethernet.localIP());
+  Serial.print(F("MQTT - "));
+  Serial.print(topic);
+  Serial.print(F(" : "));
+  Serial.println(message);
+  client.publish(topic.c_str(), message.c_str(), true);
+
+}
+
+String ip2Str(IPAddress ip){
+  String s="";
+  for (int i=0; i<4; i++) {
+    s += i  ? "." + String(ip[i]) : String(ip[i]);
+  }
+  return s;
+}
+
 void updateHomeAssistant() {
   for( unsigned int a=0; a<N_ZONES; a++ ) {
     if(zones[a].zoneEnable) {
@@ -1139,12 +1226,18 @@ boolean reconnect() {
     Serial.print(F("Attempting MQTT connection..."));
     Serial.println(F("connected"));
     client.subscribe(MQTT_HEARTBEAT_SUB);
+    client.subscribe(MQTT_ALARM_STATE_TOPIC);    
     String firmwareVer = String(F("Firmware Version: ")) + String(FIRMWARE_VERSION);
     String compileDate = String(F("Build Date: ")) + String(compile_date);
     client.publish(MQTT_VERSION_PUB, firmwareVer.c_str(), true);
     client.publish(MQTT_COMPILE_PUB, compileDate.c_str(), true);
     updateHomeAssistant();
     updateZoneStates = true;
+    updateTelemetry();
   }
   return client.connected();
+}
+
+void  triggerAlarmWithDelay() {
+  Serial.println("Alarm triggered with delay");
 }
