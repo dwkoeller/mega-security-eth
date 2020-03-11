@@ -8,8 +8,7 @@ Admin password stored in eeprom with Web Panel to change password
 
 TODO
 
-Add alarm capabilities and logic for disarm/arm, etc.
-Integrate with the remaining functions in Home Assistant MQTT Alarm Panel
+Add serial link to remote panel.
 
 NOTE:
 
