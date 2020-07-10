@@ -1,5 +1,6 @@
 
 #include "credentials.h"
+
 #include <Ethernet3.h>
 #include <PubSubClient.h>
 #include "Ticker.h"
@@ -20,7 +21,7 @@ const char compile_date[] = __DATE__ " " __TIME__;
 #define MQTT_DEVICE                          "mega-security" // Enter your MQTT device
 #define MQTT_PORT                            1883 // Enter your MQTT server port.
 #define MQTT_SOCKET_TIMEOUT                  120
-#define FIRMWARE_VERSION                     "-1.21"
+#define FIRMWARE_VERSION                     "-1.22"
 #define EEPROM_DATA_VERSION                  2
 #define NTP_SERVER                           "pool.ntp.org"
 #define MQTT_HEARTBEAT_SUB                   "heartbeat/#"
@@ -329,6 +330,7 @@ void setup() {
 
   client.setServer(MQTT_SERVER, MQTT_PORT); //1883 is the port number you have forwared for mqtt messages. You will need to change this if you've used a different port 
   client.setCallback(callback); //callback is the function that gets called for a topic sub
+  client.setBufferSize(512);
 
   Ethernet.setHostname(MQTT_DEVICE);
   Ethernet.begin(mac);
