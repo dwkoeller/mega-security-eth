@@ -1,7 +1,11 @@
 
 #include "credentials.h"
 
+#define WEBDUINO_AUTH_REALM "Mega Security Authentication"
+#define MQTT_SOCKET_TIMEOUT                  120
+
 #include <Ethernet3.h>
+#include <Dns.h>
 #include <PubSubClient.h>
 #include "Ticker.h"
 #include <Time.h>
@@ -20,7 +24,6 @@ const char compile_date[] = __DATE__ " " __TIME__;
 #define WEB_ADMIN_PASSWORD                   "password"
 #define MQTT_DEVICE                          "mega-security" // Enter your MQTT device
 #define MQTT_PORT                            1883 // Enter your MQTT server port.
-#define MQTT_SOCKET_TIMEOUT                  120
 #define FIRMWARE_VERSION                     "-1.22"
 #define EEPROM_DATA_VERSION                  2
 #define NTP_SERVER                           "pool.ntp.org"
@@ -176,6 +179,7 @@ bool triggered = false;
                  
 const int TZ_OFFSET = 5*3600;  //EST UTC-5
 
+String MQTTServerIP;
 String lastTimeStamp;
 unsigned long bootTime;
 
@@ -195,7 +199,6 @@ EthernetClient ethClient;
 PubSubClient client(ethClient);
 
 #define PREFIX ""
-#define WEBDUINO_AUTH_REALM "Mega Security Authentication"
 WebServer webserver(PREFIX, 80);
 
 void callback(char* p_topic, byte* p_payload, unsigned int p_length) {
@@ -328,14 +331,30 @@ void setup() {
   Serial.print(F("\nMega Security initializing...  Firmware Version: "));
   Serial.println(FIRMWARE_VERSION);
 
-  client.setServer(MQTT_SERVER, MQTT_PORT); //1883 is the port number you have forwared for mqtt messages. You will need to change this if you've used a different port 
-  client.setCallback(callback); //callback is the function that gets called for a topic sub
-  client.setBufferSize(512);
 
   Ethernet.setHostname(MQTT_DEVICE);
   Ethernet.begin(mac);
  
   Serial.println(Ethernet.localIP());
+
+  DNSClient dns;
+  dns.begin(Ethernet.dnsServerIP());
+
+  IPAddress result;
+
+  char myIpString[24];
+
+  if(dns.getHostByName(MQTT_SERVER, result) == 1) {
+    Serial.print("MQTT Server IP address: ");
+    Serial.println(result);
+    sprintf(myIpString, "%d.%d.%d.%d", result[0], result[1], result[2], result[3]);
+    MQTTServerIP = myIpString;
+  }
+  else Serial.print(F("dns lookup failed"));
+
+  client.setServer(MQTTServerIP.c_str(), MQTT_PORT); //1883 is the port number you have forwared for mqtt messages. You will need to change this if you've used a different port 
+  client.setCallback(callback); //callback is the function that gets called for a topic sub
+  client.setBufferSize(512);
 
   lastReconnectAttempt = 0;
 
@@ -1105,6 +1124,7 @@ void updateTelemetry(String heartbeat) {
   String topic = String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) + "/attributes";
   String message = String("{\"firmware\": \"") + FIRMWARE_VERSION  +
             String("\", \"mac_address\": \"") + mac_address +
+            String("\", \"mqtt_server\": \"") + MQTTServerIP +
             String("\", \"heartbeat\": \"") + heartbeat +
             String("\", \"ip_address\": \"") + ip2Str(Ethernet.localIP()) + String("\"}");
   Serial.print(F("MQTT - "));
@@ -1114,7 +1134,7 @@ void updateTelemetry(String heartbeat) {
   client.publish(topic.c_str(), message.c_str(), true);
 
   topic = String(MQTT_DISCOVERY_SENSOR_PREFIX) + HA_TELEMETRY + "-" + String(MQTT_DEVICE) + "/state";
-  message = String(MQTT_DEVICE) + FIRMWARE_VERSION + "  |  " + ip2Str(Ethernet.localIP()) + "  |  " + String(heartbeat);
+  message = String(MQTT_DEVICE);
   Serial.print(F("MQTT - "));
   Serial.print(topic);
   Serial.print(F(" : "));
