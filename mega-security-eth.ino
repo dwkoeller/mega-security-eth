@@ -24,7 +24,7 @@ const char compile_date[] = __DATE__ " " __TIME__;
 #define WEB_ADMIN_PASSWORD                   "password"
 #define MQTT_DEVICE                          "mega-security" // Enter your MQTT device
 #define MQTT_PORT                            1883 // Enter your MQTT server port.
-#define FIRMWARE_VERSION                     "-1.22"
+#define FIRMWARE_VERSION                     "-2.00"
 #define EEPROM_DATA_VERSION                  2
 #define NTP_SERVER                           "pool.ntp.org"
 #define MQTT_HEARTBEAT_SUB                   "heartbeat/#"
@@ -1125,6 +1125,7 @@ void updateTelemetry(String heartbeat) {
   String message = String("{\"firmware\": \"") + FIRMWARE_VERSION  +
             String("\", \"mac_address\": \"") + mac_address +
             String("\", \"mqtt_server\": \"") + MQTTServerIP +
+            String("\", \"compile_date\": \"") + compile_date +
             String("\", \"heartbeat\": \"") + heartbeat +
             String("\", \"ip_address\": \"") + ip2Str(Ethernet.localIP()) + String("\"}");
   Serial.print(F("MQTT - "));
