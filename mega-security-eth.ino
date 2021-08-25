@@ -1,3 +1,4 @@
+#include <uptime.h>
 
 #include "credentials.h"
 
@@ -24,7 +25,7 @@ const char compile_date[] = __DATE__ " " __TIME__;
 #define WEB_ADMIN_PASSWORD                   "password"
 #define MQTT_DEVICE                          "mega-security" // Enter your MQTT device
 #define MQTT_PORT                            1883 // Enter your MQTT server port.
-#define FIRMWARE_VERSION                     "-2.00"
+#define FIRMWARE_VERSION                     "-2.01"
 #define EEPROM_DATA_VERSION                  2
 #define NTP_SERVER                           "pool.ntp.org"
 #define MQTT_HEARTBEAT_SUB                   "heartbeat/#"
@@ -1111,6 +1112,8 @@ void registerTelemetry() {
 
 void updateTelemetry(String heartbeat) {
 
+  uptime::calculateUptime();
+
   byte macBuffer[6];  // create a buffer to hold the MAC address
   Ethernet.macAddress(macBuffer); // fill the buffer 
   String mac_address;
@@ -1127,6 +1130,7 @@ void updateTelemetry(String heartbeat) {
             String("\", \"mqtt_server\": \"") + MQTTServerIP +
             String("\", \"compile_date\": \"") + compile_date +
             String("\", \"heartbeat\": \"") + heartbeat +
+            String("\", \"uptime\": \"") + uptime::getDays() + "d:" + uptime::getHours() + "h:" + uptime::getMinutes() + "m:" + uptime::getSeconds() + "s" +
             String("\", \"ip_address\": \"") + ip2Str(Ethernet.localIP()) + String("\"}");
   Serial.print(F("MQTT - "));
   Serial.print(topic);
