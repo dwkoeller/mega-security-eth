@@ -25,13 +25,14 @@ const char compile_date[] = __DATE__ " " __TIME__;
 #define WEB_ADMIN_PASSWORD                   "password"
 #define MQTT_DEVICE                          "mega-security" // Enter your MQTT device
 #define MQTT_PORT                            1883 // Enter your MQTT server port.
-#define FIRMWARE_VERSION                     "-2.01"
+#define FIRMWARE_VERSION                     "-2.11"
 #define EEPROM_DATA_VERSION                  2
 #define NTP_SERVER                           "pool.ntp.org"
 #define MQTT_HEARTBEAT_SUB                   "heartbeat/#"
 #define MQTT_HEARTBEAT_TOPIC                 "heartbeat"
 #define MQTT_DISCOVERY_BINARY_SENSOR_PREFIX  "homeassistant/binary_sensor/"
 #define MQTT_DISCOVERY_SENSOR_PREFIX         "homeassistant/sensor/"
+#define MQTT_HOMEASSISTANT_STATUS            "hass/status"
 #define MQTT_ALARM_COMMAND_TOPIC             "home/alarm/set"
 #define MQTT_ALARM_STATE_TOPIC               "home/alarm"
 #define HA_TELEMETRY                         "ha"
@@ -216,6 +217,13 @@ void callback(char* p_topic, byte* p_payload, unsigned int p_length) {
     resetWatchdog();
     updateTelemetry(payload);
     return;
+  }
+  if (strTopic == MQTT_HOMEASSISTANT_STATUS) {
+    if(payload == "online") {
+      Serial.println("Home Assistant Restarted");
+      rebootFlag = true;
+      return;
+    }
   }
   if(strTopic == MQTT_ALARM_STATE_TOPIC) {
     if(payload == alarmStateCommands[ALARM_STATE_DISARMED]) {
@@ -445,6 +453,10 @@ void my_delay(unsigned long ms) {
 }
 
 void resetWatchdog() {
+  if (rebootFlag == true) {
+    Serial.println("Reboot Flag set, not resetting watchdog");
+    return;
+  }  
   digitalWrite(WATCHDOG, HIGH);
   my_delay(20);
   digitalWrite(WATCHDOG, LOW);
@@ -1252,7 +1264,8 @@ boolean reconnect() {
     Serial.print(F("Attempting MQTT connection..."));
     Serial.println(F("connected"));
     client.subscribe(MQTT_HEARTBEAT_SUB);
-    client.subscribe(MQTT_ALARM_STATE_TOPIC);    
+    client.subscribe(MQTT_ALARM_STATE_TOPIC);
+    client.subscribe(MQTT_HOMEASSISTANT_STATUS);    
     String firmwareVer = String(F("Firmware Version: ")) + String(FIRMWARE_VERSION);
     String compileDate = String(F("Build Date: ")) + String(compile_date);
     updateHomeAssistant();
