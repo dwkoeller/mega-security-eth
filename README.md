@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/21710174/README.md)
 ## Mega Security System Firmware
 
 ### Overview
