@@ -1,0 +1,17 @@
+alarm_control_panel:
+  - platform: mqtt
+    name: "Mega Security"
+    state_topic: "home/alarm"
+    command_topic: "home/alarm/set"
+    payload_disarm: "disarm"
+    payload_arm_home: "arm_home"
+    payload_arm_away: "arm_away"
+    payload_arm_night: "arm_night"
+    state_disarmed: "disarmed"
+    state_armed_home: "Armed Home"
+    state_armed_away: "Armed Away"
+    state_armed_night: "Armed Night"
+    state_pending: "pending"
+    state_triggered: "triggered"
+    code_arm_required: false
+    code_disarm_required: false
